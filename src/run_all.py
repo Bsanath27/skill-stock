@@ -66,9 +66,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--month", default=date.today().strftime("%Y-%m"))
     parser.add_argument("--supply", action="store_true", help="Also fetch supply sources (Phase 4)")
+    parser.add_argument("--history", action="store_true",
+                        help="Run historical backfill (HN 2020-2025 + SO survey + Kaggle salary) before building index")
     args = parser.parse_args()
 
     print(f"Running for month: {args.month}")
+
+    if args.history:
+        print("[run_all] --history flag set: running historical backfill first ...")
+        import run_history
+        run_history.main()
+        return  # run_history writes its own index.json
+
     clean_df = run_demand(args.month)
 
     supply_df = None
