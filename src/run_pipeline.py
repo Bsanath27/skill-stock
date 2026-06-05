@@ -17,11 +17,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 import pipeline
 import index_build
 
-DATA_DIR = os.environ.get("DATA_DIR", "data/raw")
+DATA_DIR = os.environ.get("DATA_DIR", "data/raw/archive (1)")
 OUT_PATH = os.environ.get("OUT_PATH", "public/index.json")
 
-POSTINGS_FILE = os.path.join(DATA_DIR, "job_postings.csv")
-SKILLS_FILE = os.path.join(DATA_DIR, "job_skills.csv")
+POSTINGS_FILE = os.path.join(DATA_DIR, "postings.csv")
+SKILLS_FILE = os.path.join(DATA_DIR, "jobs", "job_skills.csv")
 
 
 def main():

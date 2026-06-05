@@ -9,6 +9,7 @@ Output: deduplicated DataFrame with a skills column (list of matched canonical n
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 from typing import Optional
 
@@ -42,8 +43,10 @@ def parse_month(raw_date) -> Optional[str]:
     if pd.isna(raw_date):
         return None
     try:
-        ts = pd.to_datetime(raw_date, unit="ms", errors="ignore")
-        if pd.isna(ts):
+        # Try Unix milliseconds first, then fall back to string parsing
+        try:
+            ts = pd.to_datetime(raw_date, unit="ms")
+        except Exception:
             ts = pd.to_datetime(raw_date, errors="coerce")
         if pd.isna(ts):
             return None
@@ -146,7 +149,7 @@ def load_linkedin(postings_path: str, skills_path: str | None = None) -> pd.Data
     df["month"] = df[date_col].map(parse_month)
     df = df.dropna(subset=["month"])
 
-    df["company_norm"] = df.get("company_id", df.get("company", "")).astype(str).map(normalise_text)
+    df["company_norm"] = df.get("company_name", df.get("company_id", df.get("company", ""))).astype(str).map(normalise_text)
     df["title_norm"] = df.get("title", "").astype(str).map(normalise_text)
     df["location_norm"] = df.get("location", "").astype(str).map(normalise_text)
 
@@ -162,7 +165,7 @@ def load_linkedin(postings_path: str, skills_path: str | None = None) -> pd.Data
         try:
             sk = pd.read_csv(skills_path, low_memory=False)
             # skills.csv may map skill_abr -> skill_name
-            skills_meta_path = skills_path.replace("job_skills", "skills")
+            skills_meta_path = os.path.join(os.path.dirname(os.path.dirname(skills_path)), "mappings", "skills.csv")
             try:
                 sk_meta = pd.read_csv(skills_meta_path, low_memory=False)
                 sk = sk.merge(sk_meta, on="skill_abr", how="left")
