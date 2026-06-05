@@ -613,6 +613,11 @@ function toggleSkill(skill) {
     portfolioSkills.delete(skill);
   } else {
     portfolioSkills.add(skill);
+    const body = document.getElementById("portfolio-body");
+    if (!body.classList.contains("open")) {
+      body.classList.add("open");
+      document.getElementById("portfolio-toggle").textContent = "⊖ My Portfolio";
+    }
   }
   savePortfolio(portfolioSkills);
   renderPortfolio();
@@ -959,6 +964,10 @@ fetch("index.json")
     buildTable();
     buildPicker();
     renderPortfolio();
+    if (portfolioSkills.size > 0) {
+      document.getElementById("portfolio-body").classList.add("open");
+      document.getElementById("portfolio-toggle").textContent = "⊖ My Portfolio";
+    }
   })
   .catch(err => {
     document.getElementById("loading").innerHTML =
