@@ -82,9 +82,47 @@ def main():
 
 
 def _run_supply(month: str) -> pd.DataFrame | None:
-    """Phase 4 — added in Task 12. Stub for now."""
-    print("[supply] Phase 4 supply sources not yet wired (run after Task 12)")
-    return None
+    """Fetch all supply sources and merge into a single supply DataFrame."""
+    from functools import reduce
+    from ingest import udemy, nces, github_stats
+
+    frames = []
+
+    # Udemy (uses Firecrawl — cached after first run)
+    if os.environ.get("FIRECRAWL_API_KEY"):
+        print("[supply] Fetching Udemy course counts ...")
+        u_df = udemy.fetch(month, STORE)
+        if not u_df.empty:
+            frames.append(u_df[["skill", "month", "udemy_courses"]])
+    else:
+        print("[supply] Skipping Udemy — FIRECRAWL_API_KEY not set")
+
+    # NCES (annual CSV — no network call)
+    print("[supply] Loading NCES graduation data ...")
+    n_df = nces.fetch(month)
+    if not n_df.empty:
+        frames.append(n_df[["skill", "month", "nces_proxy"]])
+
+    # GitHub stats (public API, optional token)
+    print("[supply] Fetching GitHub repo stats ...")
+    g_df = github_stats.fetch(month, STORE)
+    if not g_df.empty:
+        frames.append(g_df[["skill", "month", "github_stars"]])
+
+    if not frames:
+        return None
+
+    merged = reduce(
+        lambda a, b: pd.merge(a, b, on=["skill", "month"], how="outer"),
+        frames,
+    )
+
+    for col in ["udemy_courses", "github_stars", "nces_proxy"]:
+        if col not in merged.columns:
+            merged[col] = None
+
+    print(f"[supply] Supply DataFrame: {len(merged)} rows, cols={list(merged.columns)}")
+    return merged
 
 
 if __name__ == "__main__":
