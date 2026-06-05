@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skill Stock — Job Market Ticker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e0a;
+    --surface: #0f1a0f;
+    --border: #1e2e1e;
+    --green: #00e676;
+    --green-dim: #00c853;
+    --red: #ff5252;
+    --red-dim: #d32f2f;
+    --muted: #4a6741;
+    --text: #c8e6c9;
+    --text-bright: #e8f5e9;
+    --mono: 'JetBrains Mono', 'Fira Mono', 'Courier New', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Ticker tape ───────────────────────────── */
+  #ticker-wrap {
+    background: #000;
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    height: 32px;
+    display: flex;
+    align-items: center;
+  }
+  #ticker-tape {
+    display: flex;
+    gap: 0;
+    white-space: nowrap;
+    animation: scroll-left 60s linear infinite;
+  }
+  #ticker-tape:hover { animation-play-state: paused; }
+  @keyframes scroll-left {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .tick-item {
+    padding: 0 24px;
+    border-right: 1px solid #1a2a1a;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+  .tick-name { color: #7cb87c; margin-right: 8px; }
+  .tick-price { color: var(--text-bright); margin-right: 6px; }
+  .up   { color: var(--green); }
+  .down { color: var(--red); }
+  .flat { color: var(--muted); }
+
+  /* ── Header ───────────────────────────────── */
+  header {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 24px 24px;
+  }
+  .logo {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: -0.02em;
+  }
+  .logo span { color: var(--muted); font-weight: 400; }
+  .tagline {
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 4px;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Main layout ──────────────────────────── */
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  /* ── Section label ────────────────────────── */
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin: 32px 0 16px;
+  }
+
+  /* ── Movers grid ──────────────────────────── */
+  #movers-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .movers-col h3 {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .movers-col.gainers h3 { color: var(--green); }
+  .movers-col.losers  h3 { color: var(--red); }
+
+  .mover-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .mover-row:hover { border-color: var(--green-dim); background: #142014; }
+  .mover-name { color: var(--text-bright); font-weight: 600; }
+  .mover-price { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .mover-mom { font-size: 13px; font-weight: 700; }
+  .mover-mom.up   { color: var(--green); }
+  .mover-mom.down { color: var(--red); }
+
+  /* ── Search + list ────────────────────────── */
+  #search-wrap {
+    position: relative;
+    margin-bottom: 12px;
+  }
+  #search {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-bright);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 12px 10px 32px;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #search:focus { border-color: var(--green-dim); }
+  #search::placeholder { color: var(--muted); }
+  #search-icon {
+    position: absolute;
+    left: 10px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 14px;
+    pointer-events: none;
+  }
+
+  /* ── Skills table ─────────────────────────── */
+  #skills-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  #skills-table th {
+    text-align: left;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  #skills-table th:last-child,
+  #skills-table td:last-child { text-align: right; }
+  .skill-row {
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .skill-row:hover { background: #0f1a0f; }
+  .skill-row td {
+    padding: 9px 12px;
+    border-bottom: 1px solid #111a11;
+    vertical-align: middle;
+  }
+  .skill-ticker { color: var(--green-dim); font-size: 11px; font-weight: 700; }
+  .skill-name   { color: var(--text-bright); }
+  .skill-price  { color: var(--text); }
+  .skill-mom    { font-weight: 700; }
+  .skill-mom.up   { color: var(--green); }
+  .skill-mom.down { color: var(--red); }
+  .skill-mom.flat { color: var(--muted); }
+  .sparkline-cell { width: 120px; }
+  canvas.spark   { display: block; }
+
+  /* ── Detail modal ─────────────────────────── */
+  #overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #overlay.open { display: flex; }
+  #modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    width: min(720px, 95vw);
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 28px 28px 24px;
+    position: relative;
+  }
+  #modal-close {
+    position: absolute; top: 12px; right: 16px;
+    background: none; border: none;
+    color: var(--muted); font-size: 20px; cursor: pointer;
+    font-family: var(--mono);
+  }
+  #modal-close:hover { color: var(--text-bright); }
+  #modal-skill-name {
+    font-size: 20px; font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 4px;
+  }
+  #modal-caption {
+    color: var(--muted);
+    font-size: 11px;
+    font-style: italic;
+    margin-bottom: 20px;
+  }
+  .modal-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .stat-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+  }
+  .stat-label { font-size: 10px; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; }
+  .stat-val   { font-size: 20px; font-weight: 700; color: var(--text-bright); margin-top: 4px; }
+  .stat-val.up   { color: var(--green); }
+  .stat-val.down { color: var(--red); }
+  #modal-chart-wrap { position: relative; height: 220px; }
+  #modal-disclaimer {
+    margin-top: 16px;
+    font-size: 10px;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+  }
+
+  /* ── Footer ───────────────────────────────── */
+  footer {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  footer a { color: var(--muted); text-decoration: underline; }
+
+  /* ── Loading / error states ───────────────── */
+  #loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 60vh;
+    gap: 12px;
+    color: var(--muted);
+  }
+  .blink { animation: blink 1s step-end infinite; }
+  @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0 } }
+
+  @media (max-width: 640px) {
+    #movers-grid { grid-template-columns: 1fr; }
+    .modal-stats { grid-template-columns: 1fr 1fr; }
+    .sparkline-cell { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Ticker tape -->
+<div id="ticker-wrap"><div id="ticker-tape"></div></div>
+
+<header>
+  <div class="logo">SKILL STOCK <span>/ JOB MARKET TICKER</span></div>
+  <div class="tagline">DEMAND-LED INDEX · MONTHLY BUCKETS · FOR ENTERTAINMENT PURPOSES</div>
+</header>
+
+<main>
+  <div id="loading">
+    <div style="font-size:22px;">▋<span class="blink">_</span></div>
+    <div>LOADING MARKET DATA...</div>
+  </div>
+
+  <div id="content" style="display:none">
+
+    <!-- Movers -->
+    <div class="section-label">TODAY'S BIGGEST MOVERS</div>
+    <div id="movers-grid">
+      <div class="movers-col gainers">
+        <h3>▲ TOP GAINERS</h3>
+        <div id="gainers"></div>
+      </div>
+      <div class="movers-col losers">
+        <h3>▼ TOP LOSERS</h3>
+        <div id="losers"></div>
+      </div>
+    </div>
+
+    <!-- All skills -->
+    <div class="section-label">ALL SKILLS</div>
+    <div id="search-wrap">
+      <span id="search-icon">⌕</span>
+      <input id="search" type="text" placeholder="Search skills..." autocomplete="off" spellcheck="false">
+    </div>
+    <table id="skills-table">
+      <thead>
+        <tr>
+          <th style="width:80px">TICKER</th>
+          <th>SKILL</th>
+          <th>PRICE</th>
+          <th>MOM %</th>
+          <th class="sparkline-cell">TREND</th>
+        </tr>
+      </thead>
+      <tbody id="skills-tbody"></tbody>
+    </table>
+
+  </div>
+</main>
+
+<!-- Detail modal -->
+<div id="overlay">
+  <div id="modal">
+    <button id="modal-close">✕</button>
+    <div id="modal-skill-name"></div>
+    <div id="modal-caption"></div>
+    <div class="modal-stats">
+      <div class="stat-box">
+        <div class="stat-label">Current Price</div>
+        <div id="stat-price" class="stat-val"></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">MoM Momentum</div>
+        <div id="stat-mom" class="stat-val"></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Latest Month Count</div>
+        <div id="stat-count" class="stat-val"></div>
+      </div>
+    </div>
+    <div id="modal-chart-wrap">
+      <canvas id="modal-chart"></canvas>
+    </div>
+    <div id="modal-disclaimer"></div>
+  </div>
+</div>
+
+<footer>
+  <div id="footer-source">Data: LinkedIn Job Postings (Kaggle, arshkon)</div>
+  <div id="footer-through"></div>
+  <div>⚠ This is a satirical demand index. Not career advice.</div>
+</footer>
+
+<script>
+// ── Captions (dry, tongue-in-cheek) ─────────────────────────────────────────
+const CAPTIONS = {
+  "Python":          "Up again. Analysts note the economy continues to exist.",
+  "SQL":             "Remarkably resilient for a 50-year-old language.",
+  "R":               "Beloved by statisticians; avoided by everyone else.",
+  "Rust":            "Climbs steadily. Memory safety demand yet to plateau.",
+  "Scala":           "Flat. Legacy code does not rewrite itself.",
+  "PyTorch":         "Researchers remain loyal. Industry follows.",
+  "TensorFlow":      "Holding steady while PyTorch collects the accolades.",
+  "scikit-learn":    "The workhorse. Nobody glamorises workhorse.",
+  "Keras":           "Now a TensorFlow subplot. Still pulling its weight.",
+  "JAX":             "Rising quietly. Google's open secret.",
+  "Pandas":          "Version 2.0 dropped. The DataFrame lives on.",
+  "NumPy":           "Foundation layer. Correlation with all other skills: 1.0.",
+  "Spark":           "Big data billing, medium data usage. Market undeterred.",
+  "Kafka":           "Messages queued. Kafka stock also queued.",
+  "Airflow":         "DAGs proliferate. Engineers schedule their own demise.",
+  "dbt":             "SQL + version control. Analysts declare victory.",
+  "Snowflake":       "Data warehouse with the valuation of a small nation.",
+  "Databricks":      "Lakehouse. They made up the word. It worked.",
+  "MLflow":          "Experiment tracking: the thing ML teams say they do.",
+  "Weights & Biases":"Charts within charts. Turtles all the way down.",
+  "LangChain":       "Peaked, corrected, adapted. Still here.",
+  "Hugging Face":    "Home of 400k models. 399k of unknown provenance.",
+  "Transformers":    "The architecture that ate the decade.",
+  "AWS":             "Default. The Java of cloud.",
+  "GCP":             "Second place. Trying harder.",
+  "Azure":           "Enterprise contracts: locked in. Engineers: mixed feelings.",
+  "Docker":          "It works on my container.",
+  "Kubernetes":      "Job descriptions added it. Engineers verify it in interview.",
+  "Terraform":       "Infrastructure as code. Merges as fear.",
+  "FastAPI":         "Async Python that people actually enjoy writing.",
+  "React":           "Framework fatigue has not slowed demand.",
+  "TypeScript":      "Type errors preferred to runtime errors. Market agrees.",
+  "Git":             "Still there. Has always been there.",
+  "CI/CD":           "Everyone wants it. Fewer explain what breaks it.",
+};
+
+const DEFAULT_CAPTION = "Market remains politely indifferent.";
+
+// ── Ticker symbol mapping ────────────────────────────────────────────────────
+const TICKERS = {
+  "Python":"PY","SQL":"SQL","R":"RLNG","Rust":"RST","Scala":"SCL",
+  "PyTorch":"PT","TensorFlow":"TF","scikit-learn":"SKL","Keras":"KRS","JAX":"JAX",
+  "Pandas":"PND","NumPy":"NPY","Spark":"SPK","Kafka":"KFK","Airflow":"AFW",
+  "dbt":"DBT","Snowflake":"SNOW","Databricks":"DBX","MLflow":"MLF",
+  "Weights & Biases":"WNB","LangChain":"LC","Hugging Face":"HF",
+  "Transformers":"TRX","AWS":"AWS","GCP":"GCP","Azure":"AZR",
+  "Docker":"DCK","Kubernetes":"K8S","Terraform":"TF2","FastAPI":"FAPI",
+  "React":"RCT","TypeScript":"TS","Git":"GIT","CI/CD":"CICD",
+};
+
+// ── State ────────────────────────────────────────────────────────────────────
+let INDEX = null;
+let modalChart = null;
+let sparkCharts = {};
+
+// ── Utilities ────────────────────────────────────────────────────────────────
+function fmtPrice(p) { return p == null ? "—" : p.toFixed(2); }
+function fmtMom(m) {
+  if (m == null) return { text: "—", cls: "flat" };
+  const sign = m > 0 ? "+" : "";
+  return { text: `${sign}${m.toFixed(1)}%`, cls: m > 0 ? "up" : m < 0 ? "down" : "flat" };
+}
+function latestPoint(skill) {
+  const s = INDEX.skills[skill];
+  if (!s || !s.series.length) return null;
+  const pts = s.series.filter(p => p.count > 0);
+  return pts.length ? pts[pts.length - 1] : s.series[s.series.length - 1];
+}
+
+// ── Ticker tape ──────────────────────────────────────────────────────────────
+function buildTicker() {
+  const items = Object.keys(INDEX.skills).map(skill => {
+    const pt = latestPoint(skill);
+    const mom = INDEX.skills[skill].latest_momentum_pct;
+    const { text, cls } = fmtMom(mom);
+    return `<span class="tick-item">
+      <span class="tick-name">${TICKERS[skill] || skill}</span>
+      <span class="tick-price">${fmtPrice(pt?.price)}</span>
+      <span class="${cls}">${text}</span>
+    </span>`;
+  }).join("");
+  // Duplicate for seamless loop
+  const tape = document.getElementById("ticker-tape");
+  tape.innerHTML = items + items;
+}
+
+// ── Movers ───────────────────────────────────────────────────────────────────
+function buildMovers() {
+  const skills = Object.keys(INDEX.skills);
+  const ranked = skills
+    .filter(s => INDEX.skills[s].latest_momentum_pct != null)
+    .sort((a, b) => INDEX.skills[b].latest_momentum_pct - INDEX.skills[a].latest_momentum_pct);
+
+  const top5 = ranked.slice(0, 5);
+  const bot5 = ranked.slice(-5).reverse();
+
+  function moverHTML(skill) {
+    const pt = latestPoint(skill);
+    const mom = INDEX.skills[skill].latest_momentum_pct;
+    const { text, cls } = fmtMom(mom);
+    return `<div class="mover-row" onclick="openModal('${skill}')">
+      <div>
+        <div class="mover-name">${skill}</div>
+        <div class="mover-price">${TICKERS[skill] || "—"} · ${fmtPrice(pt?.price)}</div>
+      </div>
+      <div class="mover-mom ${cls}">${text}</div>
+    </div>`;
+  }
+
+  document.getElementById("gainers").innerHTML = top5.map(moverHTML).join("");
+  document.getElementById("losers").innerHTML  = bot5.map(moverHTML).join("");
+}
+
+// ── Sparkline ────────────────────────────────────────────────────────────────
+function drawSpark(canvas, series, mom) {
+  const prices = series.map(p => p.price);
+  const color = mom == null ? "#4a6741" : mom > 0 ? "#00e676" : "#ff5252";
+  if (sparkCharts[canvas.id]) sparkCharts[canvas.id].destroy();
+  sparkCharts[canvas.id] = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: series.map(p => p.month),
+      datasets: [{ data: prices, borderColor: color, borderWidth: 1.5,
+        pointRadius: 0, tension: 0.3, fill: false }]
+    },
+    options: {
+      animation: false,
+      responsive: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { x: { display: false }, y: { display: false } },
+    }
+  });
+}
+
+// ── Skills table ─────────────────────────────────────────────────────────────
+function buildTable(filter = "") {
+  const tbody = document.getElementById("skills-tbody");
+  const skills = Object.keys(INDEX.skills).filter(s =>
+    !filter || s.toLowerCase().includes(filter.toLowerCase())
+  );
+
+  tbody.innerHTML = skills.map((skill, i) => {
+    const pt  = latestPoint(skill);
+    const mom = INDEX.skills[skill].latest_momentum_pct;
+    const { text, cls } = fmtMom(mom);
+    return `<tr class="skill-row" onclick="openModal('${skill}')">
+      <td class="skill-ticker">${TICKERS[skill] || "—"}</td>
+      <td class="skill-name">${skill}</td>
+      <td class="skill-price">${fmtPrice(pt?.price)}</td>
+      <td class="skill-mom ${cls}">${text}</td>
+      <td class="sparkline-cell">
+        <canvas id="spark-${i}" width="120" height="36" class="spark"></canvas>
+      </td>
+    </tr>`;
+  }).join("");
+
+  // Draw sparklines after DOM update
+  requestAnimationFrame(() => {
+    skills.forEach((skill, i) => {
+      const canvas = document.getElementById(`spark-${i}`);
+      if (!canvas) return;
+      const series = INDEX.skills[skill].series.filter(p => p.count > 0);
+      if (series.length < 2) return;
+      drawSpark(canvas, series, INDEX.skills[skill].latest_momentum_pct);
+    });
+  });
+}
+
+// ── Modal ────────────────────────────────────────────────────────────────────
+function openModal(skill) {
+  const data   = INDEX.skills[skill];
+  const pt     = latestPoint(skill);
+  const mom    = data.latest_momentum_pct;
+  const momFmt = fmtMom(mom);
+  const series = data.series.filter(p => p.count > 0);
+
+  document.getElementById("modal-skill-name").textContent = skill;
+  document.getElementById("modal-caption").textContent =
+    CAPTIONS[skill] || DEFAULT_CAPTION;
+
+  document.getElementById("stat-price").textContent = fmtPrice(pt?.price);
+  document.getElementById("stat-price").className   = "stat-val";
+
+  const statMom = document.getElementById("stat-mom");
+  statMom.textContent = momFmt.text;
+  statMom.className   = `stat-val ${momFmt.cls}`;
+
+  document.getElementById("stat-count").textContent =
+    pt?.count != null ? pt.count.toLocaleString() : "—";
+
+  document.getElementById("modal-disclaimer").textContent =
+    `Price indexed to 100 at first appearance. Data through ${INDEX.data_through}. `+
+    `Powered by playful mathematics and questionable epistemology.`;
+
+  // Chart
+  if (modalChart) modalChart.destroy();
+  const ctx = document.getElementById("modal-chart").getContext("2d");
+  const color = mom == null ? "#4a6741" : mom > 0 ? "#00e676" : "#ff5252";
+  modalChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: series.map(p => p.month),
+      datasets: [{
+        label: skill,
+        data: series.map(p => p.price),
+        borderColor: color,
+        backgroundColor: color + "18",
+        borderWidth: 2,
+        pointRadius: series.length < 30 ? 3 : 0,
+        pointHoverRadius: 5,
+        tension: 0.35,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: "index",
+          intersect: false,
+          backgroundColor: "#0a0e0a",
+          borderColor: "#1e2e1e",
+          borderWidth: 1,
+          titleColor: "#c8e6c9",
+          bodyColor: "#7cb87c",
+          callbacks: {
+            label: ctx => ` Price: ${ctx.parsed.y.toFixed(2)}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: "#4a6741", font: { family: "'JetBrains Mono', monospace", size: 10 }, maxTicksLimit: 12 },
+          grid:  { color: "#1a2a1a" },
+        },
+        y: {
+          ticks: { color: "#4a6741", font: { family: "'JetBrains Mono', monospace", size: 10 } },
+          grid:  { color: "#1a2a1a" },
+        }
+      },
+      interaction: { mode: "nearest", axis: "x", intersect: false }
+    }
+  });
+
+  document.getElementById("overlay").classList.add("open");
+}
+
+document.getElementById("modal-close").onclick = () =>
+  document.getElementById("overlay").classList.remove("open");
+document.getElementById("overlay").onclick = e => {
+  if (e.target === document.getElementById("overlay"))
+    document.getElementById("overlay").classList.remove("open");
+};
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") document.getElementById("overlay").classList.remove("open");
+});
+
+document.getElementById("search").addEventListener("input", e => {
+  buildTable(e.target.value);
+});
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+fetch("index.json")
+  .then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+  .then(data => {
+    INDEX = data;
+
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("content").style.display = "block";
+
+    document.getElementById("footer-source").textContent =
+      "Data: LinkedIn Job Postings (Kaggle, arshkon)";
+    document.getElementById("footer-through").textContent =
+      `Data through: ${data.data_through} · Generated: ${data.generated_at}`;
+
+    buildTicker();
+    buildMovers();
+    buildTable();
+  })
+  .catch(err => {
+    document.getElementById("loading").innerHTML =
+      `<div style="color:#ff5252;font-size:16px;">MARKET CLOSED</div>
+       <div style="color:#4a6741;font-size:11px;">Could not load index.json — run the pipeline first</div>
+       <div style="color:#4a6741;font-size:10px;margin-top:8px;opacity:.7">${err}</div>`;
+  });
+</script>
+</body>
+</html>

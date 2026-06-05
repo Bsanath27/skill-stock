@@ -1,0 +1,25 @@
+# Raw data — large CSVs, never commit
+data/raw/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Secrets
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# Generated artifact (commit only after pipeline runs)
+# public/index.json   <- comment this out once you want to deploy
