@@ -24,7 +24,7 @@ from skills import SKILLS
 MIN_POSTINGS_PER_MONTH = 50  # drop sparse months (noise, not signal)
 
 
-def build_index(df: pd.DataFrame) -> dict[str, Any]:
+def build_index(df: pd.DataFrame, supply_df: "pd.DataFrame | None" = None) -> dict[str, Any]:
     """
     df must have columns: month (YYYY-MM str), skills (list of canonical names).
     Returns the full index dict ready for JSON serialisation.
