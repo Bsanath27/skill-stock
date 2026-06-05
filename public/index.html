@@ -238,7 +238,7 @@
   }
   .modal-stats {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 10px;
     margin-bottom: 24px;
   }
@@ -520,6 +520,10 @@
       <div class="stat-box">
         <div class="stat-label">Latest Month Count</div>
         <div id="stat-count" class="stat-val"></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Median Salary</div>
+        <div id="stat-salary" class="stat-val"></div>
       </div>
     </div>
     <div id="modal-chart-wrap">
@@ -862,6 +866,10 @@ function openModal(skill) {
   document.getElementById("stat-count").textContent =
     pt?.count != null ? pt.count.toLocaleString() : "—";
 
+  const salary = data.salary;
+  document.getElementById("stat-salary").textContent =
+    salary ? `$${Math.round(salary.median / 1000)}k` : "—";
+
   document.getElementById("modal-disclaimer").textContent =
     `Price indexed to 100 at first appearance. Data through ${INDEX.data_through}. `+
     `Powered by playful mathematics and questionable epistemology.`;
@@ -876,31 +884,56 @@ function openModal(skill) {
     document.getElementById("modal-disclaimer").before(el);
   }
 
-  // Chart
+  // Chart — dual y-axis when SO adoption data is available
+  const soSeries = data.so_series || [];
+  const chartLabels = series.map(p => p.month);
+  const soPoints = chartLabels.map(label => {
+    const match = soSeries.find(p => label === p.year + "-06");
+    return (match && match.pct !== null) ? match.pct : null;
+  });
+  const hasSoData = soPoints.some(v => v !== null);
+
   if (modalChart) modalChart.destroy();
   const ctx = document.getElementById("modal-chart").getContext("2d");
   const color = mom == null ? "#4a6741" : mom > 0 ? "#00e676" : "#ff5252";
   modalChart = new Chart(ctx, {
     type: "line",
     data: {
-      labels: series.map(p => p.month),
-      datasets: [{
-        label: skill,
-        data: series.map(p => p.price),
-        borderColor: color,
-        backgroundColor: color + "18",
-        borderWidth: 2,
-        pointRadius: series.length < 30 ? 3 : 0,
-        pointHoverRadius: 5,
-        tension: 0.35,
-        fill: true,
-      }]
+      labels: chartLabels,
+      datasets: [
+        {
+          label: skill,
+          data: series.map(p => p.price),
+          borderColor: color,
+          backgroundColor: color + "18",
+          borderWidth: 2,
+          pointRadius: series.length < 30 ? 3 : 0,
+          pointHoverRadius: 5,
+          tension: 0.35,
+          fill: true,
+          yAxisID: "y",
+        },
+        ...(hasSoData ? [{
+          label: "SO Adoption %",
+          data: soPoints,
+          borderColor: "#f9a825",
+          backgroundColor: "transparent",
+          borderWidth: 1.5,
+          borderDash: [4, 4],
+          pointRadius: 3,
+          pointHoverRadius: 4,
+          tension: 0.3,
+          fill: false,
+          yAxisID: "y2",
+          spanGaps: false,
+        }] : []),
+      ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: { display: hasSoData },
         tooltip: {
           mode: "index",
           intersect: false,
@@ -910,7 +943,9 @@ function openModal(skill) {
           titleColor: "#c8e6c9",
           bodyColor: "#7cb87c",
           callbacks: {
-            label: ctx => ` Price: ${ctx.parsed.y.toFixed(2)}`
+            label: ctx => ctx.dataset.yAxisID === "y2"
+              ? ` SO Adoption: ${ctx.parsed.y?.toFixed(1)}%`
+              : ` Price: ${ctx.parsed.y.toFixed(2)}`,
           }
         }
       },
@@ -922,7 +957,19 @@ function openModal(skill) {
         y: {
           ticks: { color: "#4a6741", font: { family: "'JetBrains Mono', monospace", size: 10 } },
           grid:  { color: "#1a2a1a" },
-        }
+        },
+        y2: {
+          display: hasSoData,
+          position: "right",
+          min: 0,
+          max: 100,
+          ticks: {
+            color: "#f9a82588",
+            font: { family: "'JetBrains Mono', monospace", size: 9 },
+            callback: v => `${v}%`,
+          },
+          grid: { display: false },
+        },
       },
       interaction: { mode: "nearest", axis: "x", intersect: false }
     }
