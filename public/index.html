@@ -263,9 +263,7 @@
 
   /* ── Portfolio panel ──────────────────────── */
   #portfolio-section {
-    max-width: 1200px;
-    margin: 0 auto 32px;
-    padding: 0 24px;
+    margin-bottom: 32px;
   }
   #portfolio-toggle {
     background: none;
@@ -318,7 +316,7 @@
   }
   #portfolio-holdings th {
     text-align: left;
-    font-size: 9px;
+    font-size: 10px;
     letter-spacing: 0.1em;
     color: var(--muted);
     padding: 10px 16px;
@@ -459,7 +457,7 @@
 
     <!-- Portfolio -->
     <section id="portfolio-section">
-      <button id="portfolio-toggle" onclick="togglePortfolio()">⊕ My Portfolio</button>
+      <button type="button" id="portfolio-toggle" onclick="togglePortfolio()">⊕ My Portfolio</button>
       <div id="portfolio-body">
         <div class="portfolio-picker" id="skill-picker"></div>
         <div id="portfolio-holdings">
