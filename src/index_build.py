@@ -26,7 +26,7 @@ import pandas as pd
 from skills import SKILLS
 
 
-MIN_POSTINGS_PER_MONTH = 50  # drop sparse months (noise, not signal)
+MIN_POSTINGS_PER_MONTH = 50
 
 
 def _compute_saturation_scores(
@@ -36,10 +36,7 @@ def _compute_saturation_scores(
 ) -> dict[str, Optional[float]]:
     """
     Compute saturation score per skill for a given month.
-    Returns {skill: 0-100 scarcity score} where:
-      100 = very scarce (high demand, low supply) → opportunity
-        0 = very crowded (low demand, high supply)
-    Returns None for skills with no supply data.
+    Returns {skill: 0-100 scarcity score} where 100=scarce, 0=crowded.
     """
     if supply_df is None or supply_df.empty:
         return {s: None for s in demand_shares}
@@ -51,21 +48,15 @@ def _compute_saturation_scores(
     supply_map = month_supply.set_index("skill")
 
     raw_saturations: dict[str, Any] = {}
-
     for skill, demand_share in demand_shares.items():
         if skill not in supply_map.index:
             raw_saturations[skill] = None
             continue
-
         row = supply_map.loc[skill]
-        udemy = row.get("udemy_courses")
-        stars = row.get("github_stars")
-        nces  = row.get("nces_proxy")
-
         raw_saturations[skill] = {
-            "udemy":  float(udemy) if pd.notna(udemy) else None,
-            "stars":  float(stars) if pd.notna(stars) else None,
-            "nces":   float(nces)  if pd.notna(nces)  else None,
+            "udemy":  float(row.get("udemy_courses")) if pd.notna(row.get("udemy_courses")) else None,
+            "stars":  float(row.get("github_stars"))  if pd.notna(row.get("github_stars"))  else None,
+            "nces":   float(row.get("nces_proxy"))    if pd.notna(row.get("nces_proxy"))    else None,
             "demand": demand_share,
         }
 
@@ -81,58 +72,54 @@ def _compute_saturation_scores(
     if not skills_with_data:
         return {s: None for s in demand_shares}
 
-    udemy_raw  = [raw_saturations[s]["udemy"]  for s in skills_with_data]
-    stars_raw  = [raw_saturations[s]["stars"]  for s in skills_with_data]
-    nces_raw   = [raw_saturations[s]["nces"]   for s in skills_with_data]
-    demand_raw = [raw_saturations[s]["demand"] for s in skills_with_data]
-
-    udemy_norm = _norm(udemy_raw)
-    stars_norm = _norm(stars_raw)
-    nces_norm  = _norm(nces_raw)
-    # demand_raw kept as-is (raw share fractions) for the saturation ratio
+    udemy_norm = _norm([raw_saturations[s]["udemy"]  for s in skills_with_data])
+    stars_norm = _norm([raw_saturations[s]["stars"]  for s in skills_with_data])
+    nces_norm  = _norm([raw_saturations[s]["nces"]   for s in skills_with_data])
 
     supply_scores: list[Optional[float]] = []
     for u, g, n in zip(udemy_norm, stars_norm, nces_norm):
-        signals = [(u, 0.5), (n, 0.3), (g, 0.2)]
-        available = [(v, w) for v, w in signals if v is not None]
+        available = [(v, w) for v, w in [(u, 0.5), (n, 0.3), (g, 0.2)] if v is not None]
         if not available:
             supply_scores.append(None)
             continue
         total_w = sum(w for _, w in available)
         supply_scores.append(sum(v * w for v, w in available) / total_w)
 
-    # saturation = supply_norm / (raw_demand_share + ε) — high = crowded, low = scarce
-    # Using raw demand shares (not normalised) to preserve absolute demand magnitude.
-    # Flip to scarcity: scarcity = 1 - normalised_saturation → high = opportunity
     raw_sat: list[Optional[float]] = []
     for skill, sup in zip(skills_with_data, supply_scores):
         dem = demand_shares.get(skill, 0.0)
-        if sup is None:
-            raw_sat.append(None)
-        else:
-            raw_sat.append(sup / (dem + 1e-6))
+        raw_sat.append(None if sup is None else sup / (dem + 1e-6))
 
     sat_norm = _norm(raw_sat)
-    scarcity_scores = [None if v is None else round((1.0 - v) * 100, 1) for v in sat_norm]
+    scarcity = [None if v is None else round((1.0 - v) * 100, 1) for v in sat_norm]
 
     result: dict[str, Optional[float]] = {s: None for s in demand_shares}
-    for skill, score in zip(skills_with_data, scarcity_scores):
+    for skill, score in zip(skills_with_data, scarcity):
         result[skill] = score
     return result
 
 
-def build_index(df: pd.DataFrame, supply_df: "pd.DataFrame | None" = None) -> dict[str, Any]:
+def _build_skill_series(
+    df: pd.DataFrame,
+    supply_df: "pd.DataFrame | None" = None,
+) -> tuple[dict[str, Any], list[str]]:
     """
-    df: demand DataFrame with [month, skills (list)].
-    supply_df: optional supply DataFrame with [skill, month, udemy_courses, github_stars, nces_proxy].
+    Build price series for one corpus. Returns (skill_data, months).
+    skill_data: {skill: {series, latest_momentum_pct, latest_saturation}}
     """
     total_per_month: pd.Series = df.groupby("month").size()
     total_per_month = total_per_month[total_per_month >= MIN_POSTINGS_PER_MONTH]
     df = df[df["month"].isin(total_per_month.index)]
     months = sorted(total_per_month.index.tolist())
 
-    demand_shares_by_month: dict[str, dict[str, float]] = {m: {} for m in months}
+    if not months:
+        empty: dict[str, Any] = {
+            s: {"series": [], "latest_momentum_pct": None, "latest_saturation": None}
+            for s in SKILLS
+        }
+        return empty, []
 
+    demand_shares_by_month: dict[str, dict[str, float]] = {m: {} for m in months}
     skill_data: dict[str, Any] = {}
 
     for skill in SKILLS:
@@ -156,21 +143,21 @@ def build_index(df: pd.DataFrame, supply_df: "pd.DataFrame | None" = None) -> di
 
         base_share = nonzero.iloc[0]
         price = (raw_share / base_share * 100).round(2)
-
         price_arr = price.tolist()
+
         mom_pct: list[Optional[float]] = [None]
         for i in range(1, len(price_arr)):
             prev, curr = price_arr[i - 1], price_arr[i]
             mom_pct.append(round((curr - prev) / prev * 100, 2) if prev else None)
 
-        sat_scores_by_month: dict[str, Optional[float]] = {}
+        sat_by_month: dict[str, Optional[float]] = {}
         for m in months:
             scores = _compute_saturation_scores(
                 demand_shares_by_month[m],
                 supply_df if supply_df is not None else pd.DataFrame(),
                 m,
             )
-            sat_scores_by_month[m] = scores.get(skill)
+            sat_by_month[m] = scores.get(skill)
 
         series = [
             {
@@ -179,27 +166,73 @@ def build_index(df: pd.DataFrame, supply_df: "pd.DataFrame | None" = None) -> di
                 "share": round(float(raw_share[m]), 6),
                 "count": int(counts[m]),
                 "mom_pct": mom_pct[i],
-                "saturation": sat_scores_by_month.get(m),
+                "saturation": sat_by_month.get(m),
             }
             for i, m in enumerate(months)
         ]
 
         latest_mom = next((s["mom_pct"] for s in reversed(series) if s["mom_pct"] is not None), None)
         latest_sat = next((s["saturation"] for s in reversed(series) if s.get("saturation") is not None), None)
+        skill_data[skill] = {"series": series, "latest_momentum_pct": latest_mom, "latest_saturation": latest_sat}
 
-        skill_data[skill] = {
-            "series": series,
-            "latest_momentum_pct": latest_mom,
-            "latest_saturation": latest_sat,
+    return skill_data, months
+
+
+def build_index(
+    df: pd.DataFrame,
+    supply_df: "pd.DataFrame | None" = None,
+    hist_df: "pd.DataFrame | None" = None,
+    so_data: "dict | None" = None,
+    salary_data: "dict | None" = None,
+) -> dict[str, Any]:
+    """
+    Build the full skill index.
+
+    df:           live demand (Adzuna + Remotive + Firecrawl) — required.
+    supply_df:    optional Udemy/GitHub/NCES supply signals for the live months.
+    hist_df:      optional HN historical demand. Price series are built separately
+                  for each corpus then concatenated. mom_pct is nulled at the
+                  source boundary (first live data point).
+    so_data:      optional {skill: [{year, pct}, ...]} from SO survey.
+    salary_data:  optional {skill: {p25, median, p75, n}} from Kaggle.
+    """
+    live_skill_data, _ = _build_skill_series(df, supply_df)
+
+    hist_skill_data: dict[str, Any] = {}
+    if hist_df is not None and not hist_df.empty:
+        hist_skill_data, _ = _build_skill_series(hist_df)
+
+    merged_skill_data: dict[str, Any] = {}
+    for skill in SKILLS:
+        live = live_skill_data.get(
+            skill, {"series": [], "latest_momentum_pct": None, "latest_saturation": None}
+        )
+        hist_series = hist_skill_data.get(skill, {}).get("series", [])
+        live_series = list(live.get("series", []))
+
+        # Null out mom_pct at source boundary (first live point after historical)
+        if live_series and hist_series:
+            live_series[0] = {**live_series[0], "mom_pct": None}
+
+        merged_series = sorted(hist_series + live_series, key=lambda p: p["month"])
+
+        merged_skill_data[skill] = {
+            "series": merged_series,
+            "latest_momentum_pct": live.get("latest_momentum_pct"),
+            "latest_saturation": live.get("latest_saturation"),
+            "so_series": (so_data or {}).get(skill, []),
+            "salary": (salary_data or {}).get(skill),
         }
 
-    data_through = months[-1] if months else "unknown"
+    all_months = sorted({p["month"] for s in merged_skill_data.values() for p in s["series"]})
+    total_postings = len(df) + (len(hist_df) if hist_df is not None else 0)
+
     return {
         "generated_at": str(date.today()),
-        "data_through": data_through,
-        "total_months": len(months),
-        "total_postings": len(df),
-        "skills": skill_data,
+        "data_through": all_months[-1] if all_months else "unknown",
+        "total_months": len(all_months),
+        "total_postings": total_postings,
+        "skills": merged_skill_data,
     }
 
 
