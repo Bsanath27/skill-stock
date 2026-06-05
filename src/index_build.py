@@ -21,6 +21,9 @@ import pandas as pd
 from skills import SKILLS
 
 
+MIN_POSTINGS_PER_MONTH = 50  # drop sparse months (noise, not signal)
+
+
 def build_index(df: pd.DataFrame) -> dict[str, Any]:
     """
     df must have columns: month (YYYY-MM str), skills (list of canonical names).
@@ -28,6 +31,10 @@ def build_index(df: pd.DataFrame) -> dict[str, Any]:
     """
     # Total distinct postings per month (denominator)
     total_per_month: pd.Series = df.groupby("month").size()
+
+    # Drop months with too few postings — they're noise, not signal
+    total_per_month = total_per_month[total_per_month >= MIN_POSTINGS_PER_MONTH]
+    df = df[df["month"].isin(total_per_month.index)]
 
     months = sorted(total_per_month.index.tolist())
 

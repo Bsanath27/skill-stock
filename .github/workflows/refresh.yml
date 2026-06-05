@@ -1,0 +1,37 @@
+name: Monthly Skill Index Refresh
+
+on:
+  schedule:
+    - cron: "0 6 1 * *"   # 1st of every month at 06:00 UTC
+  workflow_dispatch:        # allow manual trigger from GitHub UI
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # needed to commit index.json back
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt requests
+
+      - name: Fetch Adzuna data and rebuild index
+        env:
+          ADZUNA_APP_ID:  ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+        run: python src/fetch_adzuna.py
+
+      - name: Commit updated index.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/index.json
+          git diff --cached --quiet || git commit -m "chore: refresh skill index $(date +'%Y-%m')"
+          git push
