@@ -261,6 +261,99 @@
     padding-top: 12px;
   }
 
+  /* ── Portfolio panel ──────────────────────── */
+  #portfolio-section {
+    max-width: 1200px;
+    margin: 0 auto 32px;
+    padding: 0 24px;
+  }
+  #portfolio-toggle {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-bottom: 16px;
+  }
+  #portfolio-toggle:hover { color: var(--text-bright); border-color: var(--green); }
+  #portfolio-body { display: none; }
+  #portfolio-body.open { display: block; }
+  .portfolio-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .pick-chip {
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--muted);
+    background: none;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .pick-chip.selected {
+    border-color: var(--green);
+    color: var(--green);
+    background: #00e67611;
+  }
+  #portfolio-holdings {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  #portfolio-holdings table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  #portfolio-holdings th {
+    text-align: left;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: #0a100a;
+  }
+  #portfolio-holdings td {
+    padding: 10px 16px;
+    border-bottom: 1px solid #1a221a;
+  }
+  #portfolio-holdings tr:last-child td { border-bottom: none; }
+  #portfolio-empty {
+    color: var(--muted);
+    font-size: 12px;
+    padding: 16px 0;
+  }
+  #gap-list h3 {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .gap-chip {
+    display: inline-block;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 11px;
+    color: var(--green);
+    margin: 4px;
+    cursor: pointer;
+  }
+  .gap-chip:hover { border-color: var(--green); }
+
   /* ── Scarcity meter ───────────────────────── */
   .scarcity-wrap {
     margin-top: 20px;
@@ -363,6 +456,30 @@
         <div id="losers"></div>
       </div>
     </div>
+
+    <!-- Portfolio -->
+    <section id="portfolio-section">
+      <button id="portfolio-toggle" onclick="togglePortfolio()">⊕ My Portfolio</button>
+      <div id="portfolio-body">
+        <div class="portfolio-picker" id="skill-picker"></div>
+        <div id="portfolio-holdings">
+          <table>
+            <thead>
+              <tr>
+                <th>SKILL</th>
+                <th>PRICE</th>
+                <th>MOM</th>
+                <th>SAT</th>
+                <th>COUNT</th>
+              </tr>
+            </thead>
+            <tbody id="portfolio-rows"></tbody>
+          </table>
+        </div>
+        <div id="portfolio-empty" style="display:none">Select skills above to build your portfolio.</div>
+        <div id="gap-list"></div>
+      </div>
+    </section>
 
     <!-- All skills -->
     <div class="section-label">ALL SKILLS</div>
