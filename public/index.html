@@ -261,6 +261,43 @@
     padding-top: 12px;
   }
 
+  /* ── Scarcity meter ───────────────────────── */
+  .scarcity-wrap {
+    margin-top: 20px;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+  .scarcity-label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .scarcity-bar-wrap {
+    background: #111a11;
+    border-radius: 4px;
+    height: 8px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .scarcity-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+  }
+  .scarcity-caption {
+    font-size: 10px;
+    color: var(--muted);
+    font-style: italic;
+  }
+  .sat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+  .sat-dot.scarce   { background: var(--green); }
+  .sat-dot.balanced { background: #f9a825; }
+  .sat-dot.crowded  { background: var(--red); }
+
   /* ── Footer ───────────────────────────────── */
   footer {
     max-width: 1200px;
@@ -341,6 +378,7 @@
           <th>PRICE</th>
           <th>MOM %</th>
           <th class="sparkline-cell">TREND</th>
+          <th style="width:60px;text-align:center">SAT</th>
         </tr>
       </thead>
       <tbody id="skills-tbody"></tbody>
@@ -454,6 +492,34 @@ function latestPoint(skill) {
   return pts.length ? pts[pts.length - 1] : s.series[s.series.length - 1];
 }
 
+function satDot(score) {
+  if (score == null) return '<span style="color:var(--muted)">—</span>';
+  const cls = score >= 67 ? 'scarce' : score >= 34 ? 'balanced' : 'crowded';
+  return `<span class="sat-dot ${cls}"></span>`;
+}
+
+function scarcityMeter(score) {
+  if (score == null) return '';
+  const cls   = score >= 67 ? 'scarce' : score >= 34 ? 'balanced' : 'crowded';
+  const color = score >= 67 ? 'var(--green)' : score >= 34 ? '#f9a825' : 'var(--red)';
+  const label = score >= 67
+    ? 'Scarce — more jobs than learners'
+    : score >= 34
+    ? 'Balanced — supply and demand roughly even'
+    : 'Crowded — more learners than jobs';
+  return `
+    <div class="scarcity-wrap">
+      <div class="scarcity-label">
+        <span>SCARCITY SCORE</span>
+        <span style="color:${color}">${score.toFixed(0)}/100</span>
+      </div>
+      <div class="scarcity-bar-wrap">
+        <div class="scarcity-bar" style="width:${score}%;background:${color}"></div>
+      </div>
+      <div class="scarcity-caption">${label}</div>
+    </div>`;
+}
+
 // ── Ticker tape ──────────────────────────────────────────────────────────────
 function buildTicker() {
   const items = Object.keys(INDEX.skills).map(skill => {
@@ -538,6 +604,7 @@ function buildTable(filter = "") {
       <td class="sparkline-cell">
         <canvas id="spark-${i}" width="120" height="36" class="spark"></canvas>
       </td>
+      <td style="text-align:center">${satDot(INDEX.skills[skill].latest_saturation)}</td>
     </tr>`;
   }).join("");
 
@@ -578,6 +645,16 @@ function openModal(skill) {
   document.getElementById("modal-disclaimer").textContent =
     `Price indexed to 100 at first appearance. Data through ${INDEX.data_through}. `+
     `Powered by playful mathematics and questionable epistemology.`;
+
+  const existingMeter = document.getElementById("scarcity-meter");
+  if (existingMeter) existingMeter.remove();
+  const meterHtml = scarcityMeter(data.latest_saturation);
+  if (meterHtml) {
+    const el = document.createElement("div");
+    el.id = "scarcity-meter";
+    el.innerHTML = meterHtml;
+    document.getElementById("modal-disclaimer").before(el);
+  }
 
   // Chart
   if (modalChart) modalChart.destroy();
