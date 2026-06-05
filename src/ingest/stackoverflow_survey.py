@@ -71,7 +71,7 @@ SO_SKILL_NAMES: dict[str, list[str]] = {
 
 def _is_professional(row: dict, year: str) -> bool:
     if int(year) >= 2021:
-        return "professional" in row.get("MainBranch", "").lower()
+        return "profession" in row.get("MainBranch", "").lower()
     return bool(row.get("Employment", "").strip())
 
 
