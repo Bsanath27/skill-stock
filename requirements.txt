@@ -1,3 +1,6 @@
 pandas>=2.0
 rapidfuzz>=3.0
 requests>=2.31
+datasketch>=1.6
+firecrawl-py>=1.0
+pytest>=8.0
