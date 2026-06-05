@@ -593,6 +593,37 @@ let INDEX = null;
 let modalChart = null;
 let sparkCharts = {};
 
+// ── Portfolio state ───────────────────────────────────────────────────────────
+const PORTFOLIO_KEY = "skill-stock-portfolio-v1";
+
+function loadPortfolio() {
+  try { return new Set(JSON.parse(localStorage.getItem(PORTFOLIO_KEY) || "[]")); }
+  catch { return new Set(); }
+}
+
+function savePortfolio(set) {
+  localStorage.setItem(PORTFOLIO_KEY, JSON.stringify([...set]));
+}
+
+let portfolioSkills = loadPortfolio();
+
+function toggleSkill(skill) {
+  if (portfolioSkills.has(skill)) {
+    portfolioSkills.delete(skill);
+  } else {
+    portfolioSkills.add(skill);
+  }
+  savePortfolio(portfolioSkills);
+  renderPortfolio();
+}
+
+function togglePortfolio() {
+  const body = document.getElementById("portfolio-body");
+  body.classList.toggle("open");
+  document.getElementById("portfolio-toggle").textContent =
+    body.classList.contains("open") ? "⊖ My Portfolio" : "⊕ My Portfolio";
+}
+
 // ── Utilities ────────────────────────────────────────────────────────────────
 function fmtPrice(p) { return p == null ? "—" : p.toFixed(2); }
 function fmtMom(m) {
@@ -633,6 +664,74 @@ function scarcityMeter(score) {
       </div>
       <div class="scarcity-caption">${label}</div>
     </div>`;
+}
+
+// ── Portfolio ─────────────────────────────────────────────────────────────────
+function buildPicker() {
+  const container = document.getElementById("skill-picker");
+  const skills = Object.keys(INDEX.skills).sort();
+  container.innerHTML = skills.map(skill => {
+    const sel = portfolioSkills.has(skill) ? " selected" : "";
+    return `<button type="button" class="pick-chip${sel}" onclick="toggleSkill('${skill}')">${skill}</button>`;
+  }).join("");
+}
+
+function renderPortfolio() {
+  buildPicker();
+
+  const tbody = document.getElementById("portfolio-rows");
+  const empty = document.getElementById("portfolio-empty");
+  const selected = [...portfolioSkills].filter(s => INDEX.skills[s]);
+
+  if (selected.length === 0) {
+    tbody.innerHTML = "";
+    empty.style.display = "block";
+    document.getElementById("gap-list").innerHTML = "";
+    return;
+  }
+  empty.style.display = "none";
+
+  selected.sort((a, b) => {
+    const pa = latestPoint(a)?.price ?? 0;
+    const pb = latestPoint(b)?.price ?? 0;
+    return pb - pa;
+  });
+
+  tbody.innerHTML = selected.map(skill => {
+    const pt = latestPoint(skill);
+    const { text, cls } = fmtMom(pt?.mom_pct);
+    const sat = INDEX.skills[skill].latest_saturation;
+    return `<tr onclick="openModal('${skill}')" style="cursor:pointer">
+      <td><strong>${skill}</strong></td>
+      <td>${fmtPrice(pt?.price)}</td>
+      <td class="skill-mom ${cls}">${text}</td>
+      <td>${satDot(sat)}</td>
+      <td>${pt?.count?.toLocaleString() ?? "—"}</td>
+    </tr>`;
+  }).join("");
+
+  renderGaps(selected);
+}
+
+function renderGaps(held) {
+  const heldSet = new Set(held);
+  const allSkills = Object.keys(INDEX.skills);
+  const notHeld = allSkills
+    .filter(s => !heldSet.has(s))
+    .map(s => ({ skill: s, price: latestPoint(s)?.price ?? 0 }))
+    .sort((a, b) => b.price - a.price)
+    .slice(0, 6);
+
+  if (notHeld.length === 0) {
+    document.getElementById("gap-list").innerHTML = "";
+    return;
+  }
+
+  document.getElementById("gap-list").innerHTML = `
+    <h3>Top skills not in your portfolio</h3>
+    ${notHeld.map(({ skill, price }) =>
+      `<span class="gap-chip" onclick="toggleSkill('${skill}')" title="Add ${skill} (price: ${fmtPrice(price)})">${skill} +</span>`
+    ).join("")}`;
 }
 
 // ── Ticker tape ──────────────────────────────────────────────────────────────
@@ -857,6 +956,8 @@ fetch("index.json")
     buildTicker();
     buildMovers();
     buildTable();
+    buildPicker();
+    renderPortfolio();
   })
   .catch(err => {
     document.getElementById("loading").innerHTML =
