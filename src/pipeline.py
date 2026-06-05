@@ -21,6 +21,12 @@ try:
 except ImportError:
     _HAVE_RAPIDFUZZ = False
 
+try:
+    from datasketch import MinHash, MinHashLSH
+    _HAVE_DATASKETCH = True
+except ImportError:
+    _HAVE_DATASKETCH = False
+
 from skills import SKILL_PATTERNS, SKILLS
 
 
@@ -188,6 +194,45 @@ def load_linkedin(postings_path: str, skills_path: str | None = None) -> pd.Data
             pass
 
     return df[["company_norm", "title_norm", "location_norm", "month", "text"]].copy()
+
+
+# ── Cross-source dedup (MinHash/LSH) ─────────────────────────────────────────
+
+def cross_source_dedup(df: pd.DataFrame,
+                       threshold: float = 0.60,
+                       num_perm: int = 128) -> pd.DataFrame:
+    """
+    Remove near-duplicate postings across different sources using MinHash/LSH.
+    Key: (company_norm + title_norm) shingles. Keeps first-seen row.
+    Falls back to exact dedup if datasketch not installed.
+    """
+    if df.empty:
+        return df.reset_index(drop=True)
+
+    if not _HAVE_DATASKETCH:
+        df = df.drop_duplicates(subset=["company_norm", "title_norm"])
+        return df.reset_index(drop=True)
+
+    def _minhash(text: str) -> "MinHash":
+        m = MinHash(num_perm=num_perm)
+        tokens = set(text.lower().split())
+        for t in tokens:
+            m.update(t.encode())
+        return m
+
+    lsh = MinHashLSH(threshold=threshold, num_perm=num_perm)
+    keep = []
+
+    for i, row in df.iterrows():
+        key = f"{row['company_norm']} {row['title_norm']}"
+        m = _minhash(key)
+        candidates = lsh.query(m)
+        if not candidates:
+            lsh.insert(str(i), m)
+            keep.append(i)
+        # else: near-duplicate found — skip this row
+
+    return df.loc[keep].reset_index(drop=True)
 
 
 # ── Main pipeline entry point ─────────────────────────────────────────────────
